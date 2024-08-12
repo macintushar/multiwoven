@@ -48,6 +48,19 @@ module Multiwoven
         Integrations::Service.logger
       end
 
+      def report_exception(exception, meta = {})
+        reporter = Integrations::Service.exception_reporter
+        reporter&.report(exception, meta)
+      end
+
+      def log_request_response(level, request, response)
+        Integrations::Protocol::LogMessage.new(
+          name: self.class.name,
+          level: level,
+          message: { request: request.to_s, response: response.to_s, level: level }.to_json
+        )
+      end
+
       def create_log_message(context, type, exception)
         Integrations::Protocol::LogMessage.new(
           name: context,
@@ -56,12 +69,16 @@ module Multiwoven
         ).to_multiwoven_message
       end
 
-      def handle_exception(context, type, exception)
+      def handle_exception(exception, meta = {})
         logger.error(
-          "#{context}: #{exception.message}"
+          "#{hash_to_string(meta)}: #{exception.message}"
         )
+        report_exception(exception, meta)
+        create_log_message(meta[:context], meta[:type], exception)
+      end
 
-        create_log_message(context, type, exception)
+      def hash_to_string(hash)
+        hash.map { |key, value| "#{key} = #{value}" }.join(", ")
       end
 
       def extract_data(record_object, properties)

@@ -78,6 +78,7 @@ RSpec.describe Sync, type: :model do
       expect(protocol).to be_a(Multiwoven::Integrations::Protocol::SyncConfig)
       expect(protocol.cursor_field).to eq("cursor_field")
       expect(protocol.current_cursor_field).to eq("2024-01-20")
+      expect(protocol.sync_id).to eq(sync.id.to_s)
     end
   end
 
@@ -201,6 +202,10 @@ RSpec.describe Sync, type: :model do
 
     it "transitions from pending to healthy" do
       expect(sync).to transition_from(:pending).to(:healthy).on_event(:complete)
+    end
+
+    it "transitions from healthy to healthy" do
+      expect(sync).to transition_from(:healthy).to(:healthy).on_event(:complete)
     end
 
     it "transitions from pending to failed" do
@@ -352,6 +357,56 @@ RSpec.describe Sync, type: :model do
       sync.sync_interval = -1
       expect(sync).not_to be_valid
       expect(sync.errors[:sync_interval]).to include("must be greater than 0")
+    end
+  end
+
+  describe "#schedule_sync?" do
+    let(:sync) { build(:sync) }
+
+    context "when schedule_type is manual" do
+      before do
+        sync.schedule_type = "manual"
+      end
+
+      it "returns false" do
+        expect(sync.schedule_sync?).to be false
+      end
+
+      it "returns false even when other conditions are met" do
+        sync.sync_interval = 5
+        sync.sync_interval_unit = "hours"
+        sync.save
+        expect(sync.schedule_sync?).to be false
+      end
+    end
+
+    context "when schedule_type is not manual" do
+      before do
+        sync.schedule_type = "interval"
+      end
+
+      it "returns true for a new record" do
+        expect(sync.schedule_sync?).to be true
+      end
+
+      it "returns true when sync_interval changes" do
+        sync.save
+        sync.sync_interval = 10
+        expect(sync.schedule_sync?).to be true
+      end
+
+      it "returns true when sync_interval_unit changes" do
+        sync.save
+        sync.sync_interval_unit = "days"
+        expect(sync.schedule_sync?).to be true
+      end
+
+      it "returns true when cron_expression changes" do
+        sync.schedule_type = "cron_expression"
+        sync.save
+        sync.cron_expression = "0 0 * * *"
+        expect(sync.schedule_sync?).to be true
+      end
     end
   end
 end

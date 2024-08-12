@@ -8,8 +8,15 @@ import { Box, Divider, Text } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import moment from 'moment';
 import { useEffect } from 'react';
+import { useStore } from '@/stores';
+import { useSyncStore } from '@/stores/useSyncStore';
+import { useAPIErrorsToast } from '@/hooks/useErrorToast';
 
 export const SyncRecordsTopBar = ({ syncId, syncRunId }: { syncId: string; syncRunId: string }) => {
+  const activeWorkspaceId = useStore((state) => state.workspaceId);
+  const selectedSync = useSyncStore((state) => state.selectedSync);
+  const apiErrorToast = useAPIErrorsToast();
+
   const toast = useCustomToast();
 
   const { data: syncRunData, isError: isSyncRunDataError } = useQuery({
@@ -17,7 +24,12 @@ export const SyncRecordsTopBar = ({ syncId, syncRunId }: { syncId: string; syncR
     queryFn: () => getSyncRunById(syncId || '', syncRunId || ''),
     refetchOnMount: false,
     refetchOnWindowFocus: false,
+    enabled: activeWorkspaceId > 0,
   });
+
+  if (syncRunData?.errors && syncRunData?.errors.length > 0) {
+    apiErrorToast(syncRunData.errors);
+  }
 
   const VIEW_SYNC_RUN_RECORDS_STEPS: Step[] = [
     {
@@ -25,7 +37,7 @@ export const SyncRecordsTopBar = ({ syncId, syncRunId }: { syncId: string; syncR
       url: '/activate/syncs',
     },
     {
-      name: 'Sync ' + syncId,
+      name: selectedSync.syncName || 'Sync ' + syncId,
       url: '/activate/syncs/' + syncId,
     },
     {
@@ -34,7 +46,7 @@ export const SyncRecordsTopBar = ({ syncId, syncRunId }: { syncId: string; syncR
     },
   ];
 
-  const variant = syncRunData?.data.attributes.status as StatusTagVariants;
+  const variant = syncRunData?.data?.attributes?.status as StatusTagVariants;
   const tagText = StatusTagText[variant];
 
   useEffect(() => {
@@ -80,7 +92,7 @@ export const SyncRecordsTopBar = ({ syncId, syncRunId }: { syncId: string; syncR
             Start Time :{' '}
           </Text>
           <Text size='sm' fontWeight='semibold'>
-            {moment(syncRunData?.data.attributes.started_at).format('DD/MM/YYYY HH:mm a')}
+            {moment(syncRunData?.data?.attributes?.started_at).format('DD/MM/YYYY HH:mm a')}
           </Text>
           <Divider
             orientation='vertical'
@@ -93,7 +105,7 @@ export const SyncRecordsTopBar = ({ syncId, syncRunId }: { syncId: string; syncR
             Duration :{' '}
           </Text>
           <Text size='sm' fontWeight='semibold'>
-            {syncRunData?.data.attributes.duration
+            {syncRunData?.data?.attributes?.duration
               ? syncRunData?.data.attributes.duration?.toPrecision(3) + ' seconds '
               : 'No Duration Available'}
           </Text>

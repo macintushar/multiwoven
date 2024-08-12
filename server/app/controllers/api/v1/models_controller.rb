@@ -8,20 +8,24 @@ module Api
 
       before_action :set_connector, only: %i[create]
       before_action :set_model, only: %i[show update destroy]
-      before_action :validate_query, only: %i[create update]
+      # TODO: Enable this once we have query validation implemented for all the connectors
+      # before_action :validate_query, only: %i[create update]
       after_action :event_logger
 
       def index
         @models = current_workspace
                   .models.all.page(params[:page] || 1)
+        authorize @models
         render json: @models, status: :ok
       end
 
       def show
+        authorize @model
         render json: @model, status: :ok
       end
 
       def create
+        authorize current_workspace, policy_class: ModelPolicy
         result = CreateModel.call(
           connector:,
           model_params:
@@ -39,6 +43,7 @@ module Api
       end
 
       def update
+        authorize model
         result = UpdateModel.call(
           model:,
           model_params:
@@ -57,6 +62,7 @@ module Api
       end
 
       def destroy
+        authorize model
         model.destroy!
         head :no_content
       end

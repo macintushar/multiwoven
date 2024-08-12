@@ -10,7 +10,6 @@ import {
   Legend,
   Tooltip,
 } from 'chart.js';
-import { useQuery } from '@tanstack/react-query';
 import { ReportTimePeriod, getReport, Report } from '@/services/dashboard';
 
 import { getAllConnectors } from '@/services/connectors';
@@ -20,6 +19,11 @@ import { ConnectorItem } from '../Connectors/types';
 import Reports from './Reports';
 import Loader from '@/components/Loader';
 import ReportsSkeleton from './Reports/Skeleton/Reports';
+import ServerError from '../ServerError';
+import useCustomToast from '@/hooks/useCustomToast';
+import { CustomToastStatus } from '@/components/Toast';
+import useQueryWrapper from '@/hooks/useQueryWrapper';
+import { ConnectorListResponse } from '@/views/Connectors/types';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -44,24 +48,33 @@ const Dashboard = (): JSX.Element | null => {
   const [reportTime, setReportTime] = useState<ReportTimePeriod>('one_day');
   const [report, setReport] = useState<Report>();
   const [checkedConnectorIds, setCheckedConnectorIds] = useState<number[]>([]);
+  const toast = useCustomToast();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['connectors', 'dashboard'],
-    queryFn: () => getAllConnectors(),
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-  });
+  const { data, isLoading, error } = useQueryWrapper<ConnectorListResponse, Error>(
+    ['connectors', 'dashboard'],
+    () => getAllConnectors(),
+    {
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+    },
+  );
 
   useEffect(() => {
     setFilteredConnectorsList(data?.data);
   }, [data]);
 
-  const { data: reportData, isLoading: reportsDataLoading } = useQuery({
-    queryKey: ['dashboard', 'syncs', reportTime, checkedConnectorIds],
-    queryFn: () => getReport({ time_period: reportTime, connector_ids: [...checkedConnectorIds] }),
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-  });
+  const {
+    data: reportData,
+    isLoading: reportsDataLoading,
+    error: reportsError,
+  } = useQueryWrapper<Report, Error>(
+    ['dashboard', 'syncs', reportTime, checkedConnectorIds],
+    () => getReport({ time_period: reportTime, connector_ids: [...checkedConnectorIds] }),
+    {
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+    },
+  );
 
   useEffect(() => {
     setReport(reportData);
@@ -76,6 +89,16 @@ const Dashboard = (): JSX.Element | null => {
 
   if (isLoading) {
     return <Loader />;
+  }
+
+  if (error || reportsError) {
+    toast({
+      title: 'Error: There was a connection error to the server. Please try again later.',
+      status: CustomToastStatus.Error,
+      isClosable: true,
+      position: 'bottom-right',
+    });
+    return <ServerError />;
   }
 
   return (

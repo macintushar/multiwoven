@@ -1,22 +1,23 @@
-import { Box, Text, Select, Tooltip } from '@chakra-ui/react';
-import { DiscoverResponse, Stream } from '@/views/Activate/Syncs/types';
+import { Box, Text, Select, Tooltip, Input } from '@chakra-ui/react';
+import { Stream } from '@/views/Activate/Syncs/types';
 import { ModelEntity } from '@/views/Models/types';
 import { useQuery } from '@tanstack/react-query';
 import { getCatalog } from '@/services/syncs';
 import { ConnectorItem } from '@/views/Connectors/types';
 import { getModelPreviewById } from '@/services/models';
-import { useEffect, SetStateAction, Dispatch } from 'react';
+import { SetStateAction, Dispatch } from 'react';
 import { FiInfo } from 'react-icons/fi';
+import { useStore } from '@/stores';
 
 type SelectStreamsProps = {
   model: ModelEntity;
   destination: ConnectorItem;
+  streams: Stream[];
   selectedStreamName?: string;
   selectedSyncMode?: string;
   isEdit?: boolean;
   placeholder?: string;
   onChange?: (stream: Stream) => void;
-  onStreamsLoad?: (catalog: DiscoverResponse) => void;
   selectedStream?: Stream | null;
   setSelectedSyncMode?: Dispatch<SetStateAction<string>>;
   setCursorField?: Dispatch<SetStateAction<string>>;
@@ -26,37 +27,31 @@ type SelectStreamsProps = {
 const SelectStreams = ({
   model,
   destination,
+  streams,
   selectedSyncMode,
   selectedStreamName,
   isEdit,
   placeholder,
   onChange,
-  onStreamsLoad,
   selectedStream,
   setSelectedSyncMode,
   selectedCursorField,
   setCursorField,
 }: SelectStreamsProps): JSX.Element | null => {
-  const { data: catalogData } = useQuery({
-    queryKey: ['syncs', 'catalog', destination.id],
-    queryFn: () => getCatalog(destination.id),
-    enabled: !!destination.id,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  });
+  const activeWorkspaceId = useStore((state) => state.workspaceId);
 
   const { data: modelDiscoverData } = useQuery({
-    queryKey: ['syncs', 'catalog', model.id],
+    queryKey: ['syncs', 'catalog', model.id, activeWorkspaceId],
     queryFn: () => getCatalog(model.id),
-    enabled: !!model.id,
+    enabled: !!model.id && activeWorkspaceId > 0,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
 
   const { data: previewModelData } = useQuery({
-    queryKey: ['syncs', 'preview-model', model?.connector?.id],
+    queryKey: ['syncs', 'preview-model', model?.connector?.id, activeWorkspaceId],
     queryFn: () => getModelPreviewById(model?.query, String(model?.connector?.id)),
-    enabled: !!model?.connector?.id,
+    enabled: !!model?.connector?.id && activeWorkspaceId > 0,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   });
@@ -65,13 +60,6 @@ const SelectStreams = ({
 
   const modelColumns = Object.keys(firstRow ?? {});
 
-  useEffect(() => {
-    if (catalogData) {
-      onStreamsLoad?.(catalogData);
-    }
-  }, [catalogData]);
-
-  const streams = catalogData?.data?.attributes?.catalog?.streams;
   let selectedStreamIndex = -1;
 
   const handleOnStreamChange = (streamNumber: string) => {
@@ -84,13 +72,9 @@ const SelectStreams = ({
   };
 
   if (isEdit) {
-    selectedStreamIndex = streams?.findIndex(
-      (stream) => stream.name === selectedStreamName,
-    ) as number;
+    selectedStreamIndex = streams.findIndex((stream) => stream.name === selectedStreamName);
   } else {
-    selectedStreamIndex = streams?.findIndex(
-      (stream) => stream.name === selectedStream?.name,
-    ) as number;
+    selectedStreamIndex = streams.findIndex((stream) => stream.name === selectedStream?.name);
   }
 
   const refreshOptions =
@@ -193,25 +177,36 @@ const SelectStreams = ({
             <Text size='xs' marginBottom='12px' color='black.200'>
               Select cursor field. Ignore if you are unsure about which field to select
             </Text>
-            <Select
-              placeholder={isEdit ? placeholder : 'Select cursor field'}
-              backgroundColor={'gray.100'}
-              maxWidth='500px'
-              onChange={({ target: { value } }) => setCursorField?.(value)}
-              value={selectedCursorField}
-              borderStyle='solid'
-              borderWidth='1px'
-              borderColor='gray.400'
-              fontSize='14px'
-              isRequired
-              disabled={isEdit}
-            >
-              {modelColumns?.map((modelColumn) => (
-                <option value={modelColumn} key={modelColumn}>
-                  {modelColumn}
-                </option>
-              ))}
-            </Select>
+            {isEdit ? (
+              <Input
+                backgroundColor={'gray.100'}
+                maxWidth='500px'
+                value={selectedCursorField}
+                borderStyle='solid'
+                borderWidth='1px'
+                borderColor='gray.400'
+                fontSize='14px'
+                disabled
+              />
+            ) : (
+              <Select
+                placeholder={'Select cursor field'}
+                backgroundColor={'gray.100'}
+                maxWidth='500px'
+                onChange={({ target: { value } }) => setCursorField?.(value)}
+                value={selectedCursorField}
+                borderStyle='solid'
+                borderWidth='1px'
+                borderColor='gray.400'
+                fontSize='14px'
+              >
+                {modelColumns?.map((modelColumn) => (
+                  <option value={modelColumn} key={modelColumn}>
+                    {modelColumn}
+                  </option>
+                ))}
+              </Select>
+            )}
           </Box>
         )}
       </Box>

@@ -9,11 +9,13 @@ import { getPathFromObject, getRequiredProperties } from '@/views/Activate/Syncs
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRightIcon } from '@heroicons/react/24/outline';
 import { OPTION_TYPE } from './TemplateMapping/TemplateMapping';
+import { useStore } from '@/stores';
 
 type MapFieldsProps = {
   model: ModelEntity;
   destination: ConnectorItem;
   stream: Stream | null;
+  handleRefreshCatalog: () => void;
   data?: FieldMapType[] | null;
   isEdit?: boolean;
   handleOnConfigChange: (args: FieldMapType[]) => void;
@@ -28,12 +30,16 @@ const MapFields = ({
   isEdit,
   handleOnConfigChange,
   configuration,
+  handleRefreshCatalog,
 }: MapFieldsProps): JSX.Element | null => {
   const [fields, setFields] = useState<FieldMapType[]>([{ from: '', to: '', mapping_type: '' }]);
+
+  const activeWorkspaceId = useStore((state) => state.workspaceId);
+
   const { data: previewModelData } = useQuery({
     queryKey: ['syncs', 'preview-model', model?.connector?.id],
     queryFn: () => getModelPreviewById(model?.query, String(model?.connector?.id)),
-    enabled: !!model?.connector?.id,
+    enabled: !!model?.connector?.id && activeWorkspaceId > 0,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   });
@@ -173,6 +179,7 @@ const MapFields = ({
             onChange={handleOnChange}
             isDisabled={!stream || isRequired}
             selectedConfigOptions={configuration}
+            handleRefreshCatalog={handleRefreshCatalog}
           />
           <Box
             py='20px'

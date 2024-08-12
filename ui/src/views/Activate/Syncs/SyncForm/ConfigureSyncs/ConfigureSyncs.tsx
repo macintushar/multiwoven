@@ -2,7 +2,7 @@ import ContentContainer from '@/components/ContentContainer';
 import { SteppedFormContext } from '@/components/SteppedForm/SteppedForm';
 import { ModelEntity } from '@/views/Models/types';
 import { Box } from '@chakra-ui/react';
-import { FormEvent, useContext, Dispatch, SetStateAction } from 'react';
+import { FormEvent, useContext, Dispatch, SetStateAction, useState, useEffect } from 'react';
 import SelectStreams from './SelectStreams';
 import { Stream, FieldMap as FieldMapType } from '@/views/Activate/Syncs/types';
 import MapFields from './MapFields';
@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getCatalog } from '@/services/syncs';
 import { SchemaMode } from '@/views/Activate/Syncs/types';
 import Loader from '@/components/Loader';
+import { useStore } from '@/stores';
 
 type ConfigureSyncsProps = {
   selectedStream: Stream | null;
@@ -39,6 +40,7 @@ const ConfigureSyncs = ({
   setCursorField,
 }: ConfigureSyncsProps): JSX.Element | null => {
   const { state, stepInfo, handleMoveForward } = useContext(SteppedFormContext);
+  const [refresh, setRefresh] = useState(false);
 
   const { forms } = state;
 
@@ -47,6 +49,8 @@ const ConfigureSyncs = ({
 
   const destinationInfo = forms.find((form) => form.stepKey === 'selectDestination');
   const selectedDestination = destinationInfo?.data?.selectDestination as ConnectorItem;
+
+  const activeWorkspaceId = useStore((state) => state.workspaceId);
 
   const handleOnStreamChange = (stream: Stream) => {
     setSelectedStream(stream);
@@ -71,13 +75,24 @@ const ConfigureSyncs = ({
     handleMoveForward(stepInfo?.formKey as string, payload);
   };
 
-  const { data: catalogData } = useQuery({
-    queryKey: ['syncs', 'catalog', selectedDestination?.id],
-    queryFn: () => getCatalog(selectedDestination?.id),
-    enabled: !!selectedDestination?.id,
+  const { data: catalogData, refetch } = useQuery({
+    queryKey: ['syncs', 'catalog', selectedDestination?.id, activeWorkspaceId],
+    queryFn: () => getCatalog(selectedDestination?.id, refresh),
+    enabled: !!selectedDestination?.id && activeWorkspaceId > 0,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
+
+  const handleRefreshCatalog = () => {
+    setRefresh(true);
+  };
+
+  useEffect(() => {
+    if (refresh) {
+      refetch();
+      setRefresh(false);
+    }
+  }, [refresh]);
 
   if (!catalogData?.data?.attributes?.catalog?.schema_mode) {
     return <Loader />;
@@ -86,6 +101,8 @@ const ConfigureSyncs = ({
   if (catalogData?.data?.attributes?.catalog?.schema_mode === SchemaMode.schemaless) {
     setSchemaMode(SchemaMode.schemaless);
   }
+
+  const streams = catalogData?.data?.attributes?.catalog?.streams || [];
 
   return (
     <Box width='100%' display='flex' justifyContent='center'>
@@ -100,6 +117,7 @@ const ConfigureSyncs = ({
             selectedSyncMode={selectedSyncMode}
             selectedCursorField={cursorField}
             setCursorField={setCursorField}
+            streams={streams}
           />
           {catalogData?.data?.attributes?.catalog?.schema_mode === SchemaMode.schemaless ? (
             <MapCustomFields
@@ -116,6 +134,7 @@ const ConfigureSyncs = ({
               stream={selectedStream}
               handleOnConfigChange={handleOnConfigChange}
               configuration={configuration}
+              handleRefreshCatalog={handleRefreshCatalog}
             />
           )}
 

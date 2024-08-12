@@ -85,6 +85,7 @@ export type ErrorResponse = {
 
 export type CreateSyncResponse = {
   attributes: {
+    name: string;
     created_at: Date;
     updated_at: Date;
     configuration: Record<string, string>;
@@ -117,7 +118,7 @@ export type CreateSyncResponse = {
   type: 'syncs';
 };
 
-export type SyncColumnFields = 'model' | 'destination' | 'lastUpdated' | 'status';
+export type SyncColumnFields = 'name' | 'model' | 'destination' | 'lastUpdated' | 'status';
 
 export type SyncColumnEntity = {
   key: SyncColumnFields;
@@ -150,6 +151,7 @@ export type SyncRunsResponse = {
     successful_rows: number;
     failed_rows: number;
     error: ErrorResponse | null;
+    sync_run_type: string;
   };
   id: string;
   type: 'sync_runs';
@@ -158,6 +160,7 @@ export type SyncRunsResponse = {
 export type SyncRunsColumnFields =
   | 'status'
   | 'start_time'
+  | 'sync_run_type'
   | 'duration'
   | 'rows_queried'
   | 'skipped_rows'
@@ -179,7 +182,11 @@ export type SyncRecordResponse = {
     record: Record<string, string | null>;
     status: SyncRecordStatus;
     action: 'destination_insert' | 'destination_update' | 'destination_delete';
-    error: null;
+    logs: {
+      request: string;
+      response: string;
+      level: string;
+    };
     created_at: string;
     updated_at: string;
   };

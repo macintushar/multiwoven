@@ -2,7 +2,7 @@
 
 module Multiwoven
   module Integrations
-    VERSION = "0.1.62"
+    VERSION = "0.7.4"
 
     ENABLED_SOURCES = %w[
       Snowflake
@@ -11,6 +11,11 @@ module Multiwoven
       Postgresql
       Databricks
       SalesforceConsumerGoodsCloud
+      AwsAthena
+      Clickhouse
+      AmazonS3
+      MariaDB
+      Oracle
     ].freeze
 
     ENABLED_DESTINATIONS = %w[
@@ -25,6 +30,12 @@ module Multiwoven
       SalesforceConsumerGoodsCloud
       Sftp
       Postgresql
+      Zendesk
+      Http
+      Iterable
+      MariaDB
+      DatabricksLakehouse
+      Oracle
     ].freeze
   end
 end

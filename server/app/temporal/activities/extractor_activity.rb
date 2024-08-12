@@ -30,7 +30,16 @@ module Activities
     private
 
     def select_extractor(sync_run)
-      sync_mode = sync_run.sync.sync_mode.to_sym
+      return test_sync_extractor if sync_run.test?
+
+      sync_mode_extractor(sync_run.sync.sync_mode.to_sym)
+    end
+
+    def test_sync_extractor
+      ReverseEtl::Extractors::TestSyncExtractor.new
+    end
+
+    def sync_mode_extractor(sync_mode)
       case sync_mode
       when :incremental
         ReverseEtl::Extractors::IncrementalDelta.new
@@ -42,11 +51,11 @@ module Activities
     end
 
     def log_error(sync_run)
-      Temporal.logger.error(
+      Rails.logger.error({
         error_message: "SyncRun cannot start from its current state: #{sync_run.status}",
         sync_run_id: sync_run.id,
         stack_trace: nil
-      )
+      }.to_s)
     end
   end
 end

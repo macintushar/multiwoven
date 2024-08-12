@@ -11,7 +11,7 @@ module Multiwoven
     DestinationSyncMode = Types::String.enum("insert", "upsert")
     ConnectorType = Types::String.enum("source", "destination")
     ConnectorQueryType = Types::String.enum("raw_sql", "soql")
-    ModelQueryType = Types::String.enum("raw_sql", "dbt", "soql")
+    ModelQueryType = Types::String.enum("raw_sql", "dbt", "soql", "table_selector")
     ConnectionStatusType = Types::String.enum("succeeded", "failed")
     StreamType = Types::String.enum("static", "dynamic")
     StreamAction = Types::String.enum("fetch", "create", "update", "delete")
@@ -26,6 +26,8 @@ module Multiwoven
     LogLevel = Types::String.enum("fatal", "error", "warn", "info", "debug", "trace")
     RequestRateLimitingUnit = Types::String.default("minute").enum("minute", "hour", "day")
     SchemaMode = Types::String.enum("schema", "schemaless")
+    FileFormatType = Types::String.enum("csv")
+    CompressionType = Types::String.enum("un_compressed", "zip")
 
     class ProtocolModel < Dry::Struct
       extend Multiwoven::Integrations::Core::Utils
@@ -163,7 +165,7 @@ module Multiwoven
     end
 
     class SyncConfig < ProtocolModel
-      attr_accessor :offset, :limit
+      attr_accessor :offset, :limit, :sync_run_id
 
       attribute :source, Connector
       attribute :destination, Connector
@@ -173,6 +175,8 @@ module Multiwoven
       attribute? :cursor_field, Types::String.optional
       attribute? :current_cursor_field, Types::String.optional
       attribute :destination_sync_mode, DestinationSyncMode
+      # reference ids
+      attribute :sync_id, Types::String.default("unknown")
     end
 
     class ControlMessage < ProtocolModel
@@ -193,6 +197,7 @@ module Multiwoven
       attribute :success, Types::Integer.default(0)
       attribute :failed, Types::Integer.default(0)
       attribute? :meta, Types::Hash
+      attribute? :logs, Types::Array.of(LogMessage)
 
       def to_multiwoven_message
         MultiwovenMessage.new(

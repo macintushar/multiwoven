@@ -25,14 +25,13 @@ module Multiwoven::Integrations::Destination
 
         catalog.to_multiwoven_message
       rescue StandardError => e
-        handle_exception(
-          "KLAVIYO:DISCOVER:EXCEPTION",
-          "error",
-          e
-        )
+        handle_exception(e, {
+                           context: "KLAVIYO:DISCOVER:EXCEPTION",
+                           type: "error"
+                         })
       end
 
-      def write(sync_config, records, _action = "insert")
+      def write(sync_config, records, _action = "destination_insert")
         connection_config = sync_config.destination.connection_specification.with_indifferent_access
         connection_config = connection_config.with_indifferent_access
         url = sync_config.stream.url
@@ -59,9 +58,12 @@ module Multiwoven::Integrations::Destination
             write_failure += 1
           end
         rescue StandardError => e
-          logger.error(
-            "KLAVIYO:RECORD:WRITE:FAILURE: #{e.message}"
-          )
+          handle_exception(e, {
+                             context: "KLAVIYO:RECORD:WRITE:FAILURE",
+                             type: "error",
+                             sync_id: sync_config.sync_id,
+                             sync_run_id: sync_config.sync_run_id
+                           })
           write_failure += 1
         end
         tracker = Multiwoven::Integrations::Protocol::TrackingMessage.new(
@@ -71,11 +73,12 @@ module Multiwoven::Integrations::Destination
         tracker.to_multiwoven_message
       rescue StandardError => e
         # TODO: Handle rate limiting seperately
-        handle_exception(
-          "KLAVIYO:WRITE:EXCEPTION",
-          "error",
-          e
-        )
+        handle_exception(e, {
+                           context: "KLAVIYO:RECORD:WRITE:FAILURE",
+                           type: "error",
+                           sync_id: sync_config.sync_id,
+                           sync_run_id: sync_config.sync_run_id
+                         })
       end
 
       private

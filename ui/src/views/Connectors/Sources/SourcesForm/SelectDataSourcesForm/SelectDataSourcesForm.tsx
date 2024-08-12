@@ -1,21 +1,24 @@
 import { useContext } from 'react';
-import { Box, Image, Text } from '@chakra-ui/react';
+import { Box } from '@chakra-ui/react';
 import { SteppedFormContext } from '@/components/SteppedForm/SteppedForm';
-import { getConnectorsDefintions } from '@/services/connectors';
-import { useQuery } from '@tanstack/react-query';
+import { getConnectorsDefintions, ConnectorsDefinationApiResponse } from '@/services/connectors';
 import { DatasourceType } from '@/views/Connectors/types';
 import ContentContainer from '@/components/ContentContainer';
+import useQueryWrapper from '@/hooks/useQueryWrapper';
+import EntityItem from '@/components/EntityItem';
 
 const SelectDataSourcesForm = (): JSX.Element => {
   const { stepInfo, handleMoveForward } = useContext(SteppedFormContext);
 
-  const { data } = useQuery({
-    queryKey: ['datasources', 'source'],
-    queryFn: () => getConnectorsDefintions('source'),
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    gcTime: Infinity,
-  });
+  const { data } = useQueryWrapper<ConnectorsDefinationApiResponse, Error>(
+    ['datasources', 'source'],
+    () => getConnectorsDefintions('source'),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      gcTime: Infinity,
+    },
+  );
 
   const datasources = data?.data ?? [];
 
@@ -52,29 +55,7 @@ const SelectDataSourcesForm = (): JSX.Element => {
               height='56px'
               onClick={() => handleOnClick(datasource)}
             >
-              <Box
-                height='40px'
-                width='40px'
-                marginRight='10px'
-                borderWidth='thin'
-                padding='5px'
-                borderRadius='8px'
-                display='flex'
-                justifyContent='center'
-                alignItems='center'
-                backgroundColor='gray.100'
-              >
-                <Image
-                  src={datasource.icon}
-                  alt='source icon'
-                  maxHeight='100%'
-                  height='24px'
-                  width='24px'
-                />
-              </Box>
-              <Text fontWeight='semibold' size='sm'>
-                {datasource.title}
-              </Text>
+              <EntityItem name={datasource.title} icon={datasource.icon} />
             </Box>
           ))}
         </Box>

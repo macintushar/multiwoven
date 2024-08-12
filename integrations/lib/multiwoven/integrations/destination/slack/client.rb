@@ -23,13 +23,16 @@ module Multiwoven
             catalog = build_catalog(load_catalog)
             catalog.to_multiwoven_message
           rescue StandardError => e
-            handle_exception("SLACK:DISCOVER:EXCEPTION", "error", e)
+            handle_exception(e, {
+                               context: "SLACK:DISCOVER:EXCEPTION",
+                               type: "error"
+                             })
           end
 
           def write(sync_config, records, action = "create")
             # Currently as we only create a message for each record in slack, we are not using actions.
             # This will be changed in future.
-
+            @sync_config = sync_config
             @action = sync_config.stream.action || action
             connection_config = sync_config.destination.connection_specification.with_indifferent_access
             configure_slack(connection_config[:api_token])
@@ -37,7 +40,12 @@ module Multiwoven
             @channel_id = connection_config[:channel_id]
             process_records(records, sync_config.stream)
           rescue StandardError => e
-            handle_exception("SLACK:WRITE:EXCEPTION", "error", e)
+            handle_exception(e, {
+                               context: "SLACK:WRITE:EXCEPTION",
+                               type: "error",
+                               sync_id: @sync_config.sync_id,
+                               sync_run_id: @sync_config.sync_run_id
+                             })
           end
 
           private
@@ -49,16 +57,24 @@ module Multiwoven
           end
 
           def process_records(records, stream)
+            log_message_array = []
             write_success = 0
             write_failure = 0
             records.each do |record_object|
-              process_record(stream, record_object.with_indifferent_access)
+              request, response = *process_record(stream, record_object.with_indifferent_access)
               write_success += 1
+              log_message_array << log_request_response("info", request, response)
             rescue StandardError => e
               write_failure += 1
-              handle_exception("SLACK:CRM:WRITE:EXCEPTION", "error", e)
+              handle_exception(e, {
+                                 context: "SLACK:WRITE:EXCEPTION",
+                                 type: "error",
+                                 sync_id: @sync_config.sync_id,
+                                 sync_run_id: @sync_config.sync_run_id
+                               })
+              log_message_array << log_request_response("error", request, e.message)
             end
-            tracking_message(write_success, write_failure)
+            tracking_message(write_success, write_failure, log_message_array)
           end
 
           def process_record(stream, record)
@@ -67,7 +83,8 @@ module Multiwoven
 
           def send_data_to_slack(stream_name, record = {})
             args = build_args(stream_name, record)
-            @client.send(stream_name, **args)
+            response = @client.send(stream_name, **args)
+            [args, response]
           end
 
           def build_args(stream_name, record)
@@ -100,12 +117,6 @@ module Multiwoven
 
           def load_catalog
             read_json(CATALOG_SPEC_PATH)
-          end
-
-          def tracking_message(success, failure)
-            Multiwoven::Integrations::Protocol::TrackingMessage.new(
-              success: success, failed: failure
-            ).to_multiwoven_message
           end
         end
       end

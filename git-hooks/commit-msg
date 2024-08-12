@@ -1,0 +1,34 @@
+#!/bin/sh
+
+# Called by "git commit" with the name of the file that contains
+# the commit log message. The hook should exit with non-zero status
+# after issuing an appropriate message if it wants to stop the commit.
+
+# Get the commit message file passed to the hook
+COMMIT_MSG_FILE=$1
+
+# Read the commit message
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+echo "Commit message: '$COMMIT_MSG'"
+
+# Regular expression for the commit message format
+commit_regex="^(feat|fix|docs|style|refactor|test|chore)\((CE|EE)\): .+"
+
+# Check if the commit message is a merge commit
+if echo "$COMMIT_MSG" | grep -q "^Merge "; then
+  echo "Merge commit detected. Skipping commit message validation."
+  exit 0
+fi
+
+# Validate the commit message
+if ! echo "$COMMIT_MSG" | grep -Eq "$commit_regex"; then
+  echo "Error: Invalid commit message format."
+  echo
+  echo "Format: <type>(CE|EE): <subject>"
+  echo
+  echo "Type must be one of: feat, fix, docs, style, refactor, test, chore."
+  echo "Example: [CE] feat: add source/snowflake connector"
+  exit 1
+fi
+
+exit 0

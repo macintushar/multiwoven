@@ -12,6 +12,7 @@ module ReverseEtl
           let!(:catalog) { create(:catalog, connector: destination) }
 
           let(:sync) { create(:sync, destination:) }
+          let(:sync_run) { create(:sync_run, sync:) }
 
           before do
             call_count = 0
@@ -40,6 +41,44 @@ module ReverseEtl
             expect(results.size).to eq(9)
             expect(results.first.size).to eq(100)
             expect(results.last.size).to eq(100)
+          end
+        end
+        context "when both cursor_field is empty" do
+          let(:existing_query) { "SELECT * FROM table" }
+          let(:source) { create(:connector, connector_type: "source", connector_name: "Snowflake") }
+          let(:destination) { create(:connector, connector_type: "destination") }
+          let!(:catalog) { create(:catalog, connector: destination) }
+          let(:model) { create(:model, connector: source, query: existing_query) }
+          let(:sync) do
+            create(:sync, model:, source:, destination:, cursor_field: "")
+          end
+          let(:record) do
+            Multiwoven::Integrations::Protocol::RecordMessage.new(data: { "id" => 1, "email" => "test1@mail.com",
+                                                                          "first_name" => "John",
+                                                                          "Last Name" => "Doe" },
+                                                                  emitted_at: DateTime.now.to_i).to_multiwoven_message
+          end
+          let(:record1) do
+            Multiwoven::Integrations::Protocol::RecordMessage.new(data: { "id" => 1, "email" => "test1@mail.com",
+                                                                          "first_name" => "John",
+                                                                          "Last Name" => "Doe" },
+                                                                  emitted_at: DateTime.now.to_i).to_multiwoven_message
+          end
+
+          it "executes batches and not call CursorQueryBuilder for cursor_field is empty" do
+            params = {
+              offset: 0,
+              limit: 100,
+              batch_size: 100,
+              sync_config: sync.to_protocol,
+              client:
+            }
+            allow(client).to receive(:read).and_return(*Array.new(1, [record]), [])
+            expect(CursorQueryBuilder).not_to receive(:build_cursor_query).with(sync.to_protocol, "")
+            results = []
+            BatchQuery.execute_in_batches(params) do |result, _current_offset, _last_cursor_field_value|
+              results << result
+            end
           end
         end
         context "when both cursor_field is present" do
@@ -167,6 +206,7 @@ module ReverseEtl
         let(:sync_config) { sync.to_protocol }
 
         it "builds a new SyncConfig with modified query and other attributes" do
+          sync_config.sync_run_id = "sync_run_id"
           modified_sync_config = described_class.build_cursor_sync_config(sync_config, new_query)
 
           expect(modified_sync_config).to be_a(Multiwoven::Integrations::Protocol::SyncConfig)
@@ -183,6 +223,7 @@ module ReverseEtl
           expect(modified_sync_config.current_cursor_field).to eq(sync_config.current_cursor_field)
           expect(modified_sync_config.limit).to eq(sync_config.limit)
           expect(modified_sync_config.offset).to eq(0)
+          expect(modified_sync_config.sync_run_id).to eq("sync_run_id")
         end
       end
 

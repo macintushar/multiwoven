@@ -1,4 +1,4 @@
-import { ApiResponse } from '@/views/Connectors/types';
+import { ApiResponse } from '@/services/common';
 import { SyncRecordResponse, SyncRecordStatus } from '../types';
 import { TabList } from '@chakra-ui/react';
 import TabItem from '@/components/TabItem';
@@ -16,15 +16,15 @@ export const FilterTabs = ({ setFilter, syncRunRecords }: FilterTabsType) => {
         action={() => setFilter(SyncRecordStatus.success)}
         isBadgeVisible
         badgeText={syncRunRecords?.data
-          .filter((record) => record.attributes.status === SyncRecordStatus.success)
+          ?.filter((record) => record.attributes.status === SyncRecordStatus.success)
           .length.toString()}
       />
       <TabItem
-        text='Failed'
+        text='Rejected'
         action={() => setFilter(SyncRecordStatus.failed)}
         isBadgeVisible
         badgeText={syncRunRecords?.data
-          .filter((record) => record.attributes.status === SyncRecordStatus.failed)
+          ?.filter((record) => record.attributes.status === SyncRecordStatus.failed)
           .length.toString()}
       />
     </TabList>

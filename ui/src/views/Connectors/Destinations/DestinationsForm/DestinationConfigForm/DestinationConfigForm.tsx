@@ -9,19 +9,22 @@ import ContentContainer from '@/components/ContentContainer';
 import SourceFormFooter from '@/views/Connectors/Sources/SourcesForm/SourceFormFooter';
 import JSONSchemaForm from '@/components/JSONSchemaForm';
 import { generateUiSchema } from '@/utils/generateUiSchema';
+import { useStore } from '@/stores';
+import { processFormData } from '@/views/Connectors/helpers';
 
 const DestinationConfigForm = (): JSX.Element | null => {
   const { state, stepInfo, handleMoveForward } = useContext(SteppedFormContext);
   const { forms } = state;
   const selectedDestination = forms.find(({ stepKey }) => stepKey === 'destination');
+  const activeWorkspaceId = useStore((state) => state.workspaceId);
 
   const destination = selectedDestination?.data?.destination as string;
   if (!destination) return null;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['connector_definition', destination],
+    queryKey: ['connector_definition', destination, activeWorkspaceId],
     queryFn: () => getConnectorDefinition('destination', destination),
-    enabled: !!destination,
+    enabled: !!destination && activeWorkspaceId > 0,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
@@ -32,7 +35,8 @@ const DestinationConfigForm = (): JSX.Element | null => {
   if (!connectorSchema) return null;
 
   const handleFormSubmit = async (formData: FormData) => {
-    handleMoveForward(stepInfo?.formKey as string, formData);
+    const processedFormData = processFormData(formData);
+    handleMoveForward(stepInfo?.formKey as string, processedFormData);
   };
 
   const generatedSchema = generateUiSchema(connectorSchema);

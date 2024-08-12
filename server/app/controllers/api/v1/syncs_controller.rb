@@ -14,14 +14,17 @@ module Api
       def index
         @syncs = current_workspace
                  .syncs.all.page(params[:page] || 1)
+        authorize @syncs
         render json: @syncs, status: :ok
       end
 
       def show
+        authorize @sync
         render json: @sync, status: :ok
       end
 
       def create
+        authorize current_workspace, policy_class: SyncPolicy
         result = CreateSync.call(
           workspace: current_workspace,
           sync_params:
@@ -40,6 +43,7 @@ module Api
       end
 
       def update
+        authorize current_workspace, policy_class: SyncPolicy
         result = UpdateSync.call(
           sync:,
           sync_params:
@@ -58,6 +62,7 @@ module Api
       end
 
       def destroy
+        authorize sync
         sync.discard
         head :no_content
       end
@@ -67,7 +72,7 @@ module Api
 
       def configurations
         result = SyncConfigurations.call
-
+        authorize result, policy_class: SyncPolicy
         if result.success?
           render json: result.configurations, status: :ok
         elsif result.failure?

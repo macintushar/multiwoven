@@ -12,12 +12,32 @@ jobs:
     strategy:
       matrix:
         ruby-version: [3.2.0]
+
     steps:
       - uses: actions/checkout@v2
       - name: Set up Ruby ${{ matrix.ruby-version }}
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby-version }}
+
+      - name: Update package list
+        run: sudo apt update
+
+      - name: Download and Extract DuckDB ODBC driver
+        run: |
+            wget -O duckdb.zip https://github.com/duckdb/duckdb/releases/download/v1.0.0/libduckdb-linux-amd64.zip
+            unzip duckdb.zip -d libduckdb
+            sudo mv libduckdb/duckdb.* /usr/local/include
+            sudo mv libduckdb/libduckdb.so /usr/local/lib
+            sudo ldconfig /usr/local/lib
+
+      - name: Download and Install Oracle Instant Client
+        run: |
+          sudo apt-get install -y libaio1 alien
+          wget http://yum.oracle.com/repo/OracleLinux/OL7/oracle/instantclient/x86_64/getPackage/oracle-instantclient19.6-basic-19.6.0.0.0-1.x86_64.rpm
+          wget http://yum.oracle.com/repo/OracleLinux/OL7/oracle/instantclient/x86_64/getPackage/oracle-instantclient19.6-devel-19.6.0.0.0-1.x86_64.rpm
+          sudo alien -i --scripts oracle-instantclient*.rpm
+          rm -f oracle-instantclient*.rpm
 
       - name: Install dependencies
         run: |
@@ -37,7 +57,7 @@ jobs:
 
       - name: Push coverage data to Code Climate
         env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID_INTEGRATIONS }}
         run: |
           ./cc-test-reporter before-build
           ./cc-test-reporter after-build --exit-code $?

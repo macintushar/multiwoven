@@ -1,7 +1,6 @@
-import { Box, Button, Flex, HStack, Image, Spacer, Text, VStack } from '@chakra-ui/react';
+import { Box, Button, Flex, HStack, Image, Spacer, VStack } from '@chakra-ui/react';
 
 import StarsImage from '@/assets/images/stars.svg';
-import EmptyQueryPreviewImage from '@/assets/images/EmptyQueryPreview.png';
 
 import Editor, { useMonaco } from '@monaco-editor/react';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -20,6 +19,8 @@ import { CustomToastStatus } from '@/components/Toast/index';
 import useCustomToast from '@/hooks/useCustomToast';
 import { format } from 'sql-formatter';
 import { autocompleteEntries } from './autocomplete';
+import titleCase from '@/utils/TitleCase';
+import ModelQueryResults from '../ModelQueryResults';
 
 const DefineSQL = ({
   hasPrefilledValues = false,
@@ -78,23 +79,23 @@ const DefineSQL = ({
     setLoading(true);
     const query = editorRef.current?.getValue() as string;
     const response = await getModelPreviewById(query, connector_id?.toString());
-    if ('data' in response && response.data.errors) {
-      response.data.errors.forEach((error: { title: string; detail: string }) => {
+    if ('errors' in response) {
+      response.errors?.forEach((error) => {
         showToast({
-          title: 'An Error Occurred',
-          description: error.detail || 'Please check your query and try again',
-          status: CustomToastStatus.Error,
-          duration: 9000,
+          duration: 5000,
           isClosable: true,
           position: 'bottom-right',
+          colorScheme: 'red',
+          status: CustomToastStatus.Warning,
+          title: titleCase(error.detail),
         });
       });
+      setLoading(false);
     } else {
       setTableData(ConvertModelPreviewToTableData(response as Field[]));
       canMoveForward(true);
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   async function handleModelUpdate() {
@@ -120,6 +121,17 @@ const DefineSQL = ({
         position: 'bottom-right',
       });
       navigate('/define/models/' + prefillValues?.model_id || '');
+    } else {
+      modelUpdateResponse.errors?.forEach((error) => {
+        showToast({
+          duration: 5000,
+          isClosable: true,
+          position: 'bottom-right',
+          colorScheme: 'red',
+          status: CustomToastStatus.Warning,
+          title: titleCase(error.detail),
+        });
+      });
     }
   }
 
@@ -236,7 +248,7 @@ const DefineSQL = ({
                     formatOnType: true,
                     formatOnPaste: true,
                     autoIndent: 'full',
-                    wordBasedSuggestions: true,
+                    wordBasedSuggestions: 'currentDocument',
                     quickSuggestions: true,
                     tabCompletion: 'on',
                     contextmenu: true,
@@ -258,28 +270,7 @@ const DefineSQL = ({
                 />
               </Box>
             ) : (
-              <Box
-                border='1px'
-                borderColor='gray.400'
-                w='full'
-                minW='4xl'
-                minH='100%'
-                h='2xs'
-                rounded='xl'
-                p={1}
-                alignItems='center'
-                justifyContent='center'
-              >
-                <VStack mx='auto' mt={12}>
-                  <Image src={EmptyQueryPreviewImage} h='20' />
-                  <Text size='md' fontWeight='semibold'>
-                    Ready to test your query?
-                  </Text>
-                  <Text size='sm' color='black.200' fontWeight='regular'>
-                    Run your query to preview the rows
-                  </Text>
-                </VStack>
-              </Box>
+              <ModelQueryResults />
             )}
           </VStack>
         </Box>

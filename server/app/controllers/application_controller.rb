@@ -4,11 +4,17 @@ class ApplicationController < ActionController::API
   include Devise::Controllers::Helpers
   include ExceptionHandler
   include ScriptVault::Tracker
+  include Pundit::Authorization
   before_action :authenticate_user!
   before_action :validate_contract
   around_action :handle_with_exception
+  after_action :verify_authorized
 
   private
+
+  def pundit_user
+    CurrentContext.new(current_user, current_workspace)
+  end
 
   # Override Devise's method to handle authentication
   def authenticate_user!
@@ -19,7 +25,9 @@ class ApplicationController < ActionController::API
   end
 
   def current_workspace
-    @current_workspace ||= current_user.workspaces.first
+    workspace_id = request.headers["Workspace-Id"]
+    @current_workspace = current_user.workspaces.find_by(id: workspace_id)
+    @current_workspace || raise(StandardError, "Workspace not found")
   end
 
   def current_organization

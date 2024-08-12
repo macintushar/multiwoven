@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Multiwoven::Integrations::Destination::Postgresql::Client do # rubocop:disable Metrics/BlockLength
+RSpec.describe Multiwoven::Integrations::Destination::Postgresql::Client do
   let(:client) { Multiwoven::Integrations::Destination::Postgresql::Client.new }
   let(:sync_config) do
     {
@@ -47,7 +47,8 @@ RSpec.describe Multiwoven::Integrations::Destination::Postgresql::Client do # ru
       },
       "sync_mode": "full_refresh",
       "cursor_field": "timestamp",
-      "destination_sync_mode": "upsert"
+      "destination_sync_mode": "upsert",
+      "sync_id": "1"
     }
   end
 
@@ -106,24 +107,57 @@ RSpec.describe Multiwoven::Integrations::Destination::Postgresql::Client do # ru
     context "success" do
       it "write records successfully" do
         s_config = Multiwoven::Integrations::Protocol::SyncConfig.from_json(sync_config.to_json)
+        s_config.sync_run_id = "33"
         allow(PG).to receive(:connect).and_return(pg_connection)
 
         allow(pg_connection).to receive(:exec).and_return(true)
 
         tracking = subject.write(s_config, [records.first.data.transform_keys(&:to_s)]).tracking
         expect(tracking.success).to eql(1)
+        log_message = tracking.logs.first
+        expect(log_message).to be_a(Multiwoven::Integrations::Protocol::LogMessage)
+        expect(log_message.level).to eql("info")
+
+        expect(log_message.message).to include("request")
+        expect(log_message.message).to include("response")
+      end
+
+      it "write records successfully on update record action destination_update" do
+        s_config = Multiwoven::Integrations::Protocol::SyncConfig.from_json(sync_config.to_json)
+        s_config.sync_run_id = "33"
+        allow(PG).to receive(:connect).and_return(pg_connection)
+
+        allow(pg_connection).to receive(:exec).and_return(true)
+
+        tracking = subject.write(s_config, [records.first.data.transform_keys(&:to_s)], "destination_update").tracking
+        expect(tracking.success).to eql(1)
+        expect(tracking.logs.count).to eql(1)
+        log_message = tracking.logs.first
+        expect(log_message).to be_a(Multiwoven::Integrations::Protocol::LogMessage)
+        expect(log_message.level).to eql("info")
+
+        expect(log_message.message).to include("request")
+        expect(log_message.message).to include("response")
       end
     end
 
     context "failure" do
       it "handle record write failures" do
         s_config = Multiwoven::Integrations::Protocol::SyncConfig.from_json(sync_config.to_json)
+        s_config.sync_run_id = "34"
+
         allow(PG).to receive(:connect).and_return(pg_connection)
 
         allow(pg_connection).to receive(:exec).and_raise(StandardError.new("test error"))
 
         tracking = subject.write(s_config, [records.first.data.transform_keys(&:to_s)]).tracking
         expect(tracking.failed).to eql(1)
+        expect(tracking.logs.count).to eql(1)
+        log_message = tracking.logs.first
+        expect(log_message).to be_a(Multiwoven::Integrations::Protocol::LogMessage)
+        expect(log_message.level).to eql("error")
+        expect(log_message.message).to include("request")
+        expect(log_message.message).to include("\"response\":\"test error\"")
       end
     end
   end
@@ -157,9 +191,10 @@ RSpec.describe Multiwoven::Integrations::Destination::Postgresql::Client do # ru
     it "discover schema failure" do
       allow(client).to receive(:create_connection).and_raise(StandardError.new("test error"))
       expect(client).to receive(:handle_exception).with(
-        "POSTGRESQL:DISCOVER:EXCEPTION",
-        "error",
-        an_instance_of(StandardError)
+        an_instance_of(StandardError), {
+          context: "POSTGRESQL:DISCOVER:EXCEPTION",
+          type: "error"
+        }
       )
       client.discover(sync_config[:source][:connection_specification])
     end

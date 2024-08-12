@@ -14,9 +14,18 @@
 #
 # app/serializers/workspace_serializer.rb
 class WorkspaceSerializer < ActiveModel::Serializer
-  attributes :id, :name, :slug, :status, :api_key, :created_at, :updated_at
+  attributes :id, :name, :slug, :status, :api_key, :created_at, :updated_at, :description, :region, :organization_id,
+             :organization_name, :members_count
 
-  # You can also define associations if you need to include related data
-  has_many :users
-  belongs_to :organization
+  def organization_id
+    object.organization.id
+  end
+
+  def organization_name
+    object.organization.name
+  end
+
+  def members_count
+    object.users.count
+  end
 end

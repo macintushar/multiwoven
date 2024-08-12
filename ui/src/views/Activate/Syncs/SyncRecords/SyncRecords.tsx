@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { Box, Image, Tabs, Text } from '@chakra-ui/react';
 
 import { getSyncRecords } from '@/services/syncs';
 
 import Loader from '@/components/Loader';
-import Table from '@/components/Table';
 import ContentContainer from '@/components/ContentContainer';
 
-import { TableItem } from '@/views/Activate/Syncs/SyncRecords/SyncRecordsTableItem';
 import Pagination from '@/components/Pagination';
 import SyncRunEmptyImage from '@/assets/images/empty-state-illustration.svg';
 
@@ -18,6 +15,12 @@ import useCustomToast from '@/hooks/useCustomToast';
 import { CustomToastStatus } from '@/components/Toast';
 import { SyncRecordStatus } from '../types';
 import { FilterTabs } from './FilterTabs';
+import useQueryWrapper from '@/hooks/useQueryWrapper';
+import { ApiResponse } from '@/services/common';
+import { SyncRecordResponse } from '@/views/Activate/Syncs/types';
+
+import DataTable from '@/components/DataTable';
+import { SyncRecordsColumns, useDynamicSyncColumns } from './SyncRecordsColumns';
 
 const SyncRecords = (): JSX.Element => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -33,70 +36,25 @@ const SyncRecords = (): JSX.Element => {
     data: syncRunRecords,
     isLoading: isSyncRecordsLoading,
     isError: isSyncRecordsError,
-  } = useQuery({
-    queryKey: ['activate', 'sync-records', syncRunId, currentPage],
-    queryFn: () => getSyncRecords(syncId as string, syncRunId as string, currentPage.toString()),
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-  });
+  } = useQueryWrapper<ApiResponse<Array<SyncRecordResponse>>, Error>(
+    ['activate', 'sync-records', syncRunId, currentPage],
+    () => getSyncRecords(syncId as string, syncRunId as string, currentPage.toString()),
+    {
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+    },
+  );
 
-  const filteredRecords = useMemo(
-    () => syncRunRecords?.data.filter((record) => record.attributes.status === currentFilter),
+  const data = useMemo(
+    () => syncRunRecords?.data?.filter?.((record) => record.attributes.status === currentFilter),
     [syncRunRecords, currentFilter],
   );
 
-  const syncRunRecordColumns = useMemo(
-    () =>
-      filteredRecords && filteredRecords.length > 0
-        ? Object.keys(filteredRecords[0].attributes.record)
-        : [],
-    [filteredRecords],
+  const dynamicSyncColumns = useDynamicSyncColumns(data ? data : []);
+  const allColumns = useMemo(
+    () => [...SyncRecordsColumns, ...dynamicSyncColumns],
+    [SyncRecordsColumns, dynamicSyncColumns],
   );
-
-  const SYNC_RUNS_RECORDS_COLUMNS = useMemo(
-    () => [
-      {
-        key: 'status',
-        name: 'Status',
-      },
-      ...syncRunRecordColumns.map((column) => ({
-        key: column,
-        name: column,
-      })),
-    ],
-    [syncRunRecordColumns],
-  );
-
-  const tableData = useMemo(() => {
-    const rows = filteredRecords?.map((data) => {
-      return SYNC_RUNS_RECORDS_COLUMNS.reduce(
-        (acc, { key }) => ({
-          ...acc,
-          [key]: <TableItem field={key} data={data} />,
-          id: data.id,
-        }),
-        {},
-      );
-    });
-
-    return {
-      columns: SYNC_RUNS_RECORDS_COLUMNS,
-      data: rows || [],
-      error: '',
-    };
-  }, [filteredRecords, SYNC_RUNS_RECORDS_COLUMNS]);
-
-  const handleNextPage = () => {
-    if (syncRunRecords?.links?.next) {
-      setCurrentPage((prevPage) => prevPage + 1);
-    }
-  };
-
-  const handlePrevPage = () => {
-    if (syncRunRecords?.links?.prev) {
-      setCurrentPage((prevPage) => Math.max(prevPage - 1, 1));
-    }
-  };
 
   useEffect(() => {
     setSearchParams({ page: currentPage.toString() });
@@ -114,6 +72,18 @@ const SyncRecords = (): JSX.Element => {
       });
     }
   }, [isSyncRecordsError, toast]);
+
+  const handleNextPage = () => {
+    if (syncRunRecords?.links?.next) {
+      setCurrentPage((prevPage) => prevPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (syncRunRecords?.links?.prev) {
+      setCurrentPage((prevPage) => Math.max(prevPage - 1, 1));
+    }
+  };
 
   return (
     <ContentContainer>
@@ -139,7 +109,7 @@ const SyncRecords = (): JSX.Element => {
         <Loader />
       ) : (
         <Box width='100%' pt={'20px'}>
-          {filteredRecords?.length === 0 ? (
+          {data?.length === 0 || !data ? (
             <Box
               display='flex'
               w='fit-content'
@@ -155,7 +125,9 @@ const SyncRecords = (): JSX.Element => {
             </Box>
           ) : (
             <Box>
-              <Table data={tableData} />
+              <Box border='1px' borderColor='gray.400' borderRadius='lg' overflowX='scroll'>
+                <DataTable data={data} columns={allColumns} />
+              </Box>
               <Box display='flex' flexDirection='row-reverse' pt='10px'>
                 <Pagination
                   currentPage={currentPage}

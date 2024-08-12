@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Multiwoven::Integrations::Destination::Sftp::Client do # rubocop:disable Metrics/BlockLength
+RSpec.describe Multiwoven::Integrations::Destination::Sftp::Client do
   include WebMock::API
 
   before(:each) do
@@ -17,7 +17,11 @@ RSpec.describe Multiwoven::Integrations::Destination::Sftp::Client do # rubocop:
       port: 22,
       password: "test_password",
       destination_path: "/multiwoven",
-      file_name: "test"
+      file_name: "test",
+      format: {
+        format_type: "csv",
+        compression_type: "un_compressed"
+      }
     }.with_indifferent_access
   end
   let(:sync_config_json) do
@@ -58,6 +62,18 @@ RSpec.describe Multiwoven::Integrations::Destination::Sftp::Client do # rubocop:
   end
   let(:csv_content) { "id,name\n1,Test Record\n" }
 
+  def sync_config
+    Multiwoven::Integrations::Protocol::SyncConfig.from_json(
+      sync_config_json.to_json
+    )
+  end
+
+  def sync_config_compressed_zip
+    sync_config_json[:destination][:connection_specification][:format][:compression_type] = "zip"
+    Multiwoven::Integrations::Protocol::SyncConfig.from_json(
+      sync_config_json.to_json
+    )
+  end
   describe "#check_connection" do
     it "successfully checks connection" do
       expect(client).to receive(:with_sftp_client).and_yield(double)
@@ -92,28 +108,46 @@ RSpec.describe Multiwoven::Integrations::Destination::Sftp::Client do # rubocop:
   end
 
   describe "#write" do
-    it "successfully writes records" do
+    it "successfully writes records with un_compressed" do
       allow(client).to receive(:with_sftp_client).and_yield(mock_sftp_session)
       allow(client).to receive(:generate_csv_content).and_return(csv_content)
       allow(mock_sftp_session).to receive(:upload!).and_return(true)
-      response = client.write(sync_config, records, "insert")
+      response = client.write(sync_config, records, "destination_insert")
       expect(response.tracking.success).to eq(records.size)
       expect(response.tracking.failed).to eq(0)
     end
 
-    it "handles the failure and increments the failure count" do
+    it "successfully writes records with compressed" do
+      allow(client).to receive(:with_sftp_client).and_yield(mock_sftp_session)
+      allow(client).to receive(:generate_csv_content).and_return(csv_content)
+      allow(mock_sftp_session).to receive(:upload!).and_return(true)
+      response = client.write(sync_config_compressed_zip, records, "destination_insert")
+      expect(response.tracking.success).to eq(records.size)
+      expect(response.tracking.failed).to eq(0)
+    end
+
+    it "handles the failure with un_compressed " do
       allow(client).to receive(:with_sftp_client).and_yield(mock_sftp_session)
       allow(mock_sftp_session).to receive(:upload!).and_raise(StandardError, "SFTP upload failed")
-      response = client.write(sync_config, records, "insert")
+      response = client.write(sync_config, records, "destination_insert")
 
       # Account for handling failure outside the inner rescue block
       expect(response.tracking.failed).to eq(records.size)
       expect(response.tracking.success).to eq(0)
     end
 
+    it "handles the failure with compressed " do
+      allow(client).to receive(:with_sftp_client).and_yield(mock_sftp_session)
+      allow(mock_sftp_session).to receive(:upload!).and_raise(StandardError, "SFTP upload failed")
+      response = client.write(sync_config_compressed_zip, records, "destination_insert")
+
+      expect(response.tracking.failed).to eq(records.size)
+      expect(response.tracking.success).to eq(0)
+    end
+
     it "handles write failure with_sftp_client" do
       allow(client).to receive(:with_sftp_client).and_raise(StandardError.new("write failed"))
-      response = client.write(sync_config, records, "insert")
+      response = client.write(sync_config, records, "destination_insert")
       expect(response).to be_a(Multiwoven::Integrations::Protocol::MultiwovenMessage)
       expect(response.log).to be_a(Multiwoven::Integrations::Protocol::LogMessage)
       expect(response.log.level).to eq("error")
@@ -185,14 +219,14 @@ RSpec.describe Multiwoven::Integrations::Destination::Sftp::Client do # rubocop:
   end
 
   describe "#generate_file_path" do
-    it "generate file" do
-      expect(client.send(:generate_file_path, sync_config)).to include("/multiwoven/test_")
+    it "generate csv file" do
+      file_path = client.send(:generate_file_path, sync_config)
+      expect(file_path).to match(%r{/multiwoven/test_\d{8}-\d{6}\.csv\z})
     end
-  end
 
-  def sync_config
-    Multiwoven::Integrations::Protocol::SyncConfig.from_json(
-      sync_config_json.to_json
-    )
+    it "generate zip file" do
+      file_path = client.send(:generate_file_path, sync_config_compressed_zip)
+      expect(file_path).to match(%r{/multiwoven/test_\d{8}-\d{6}\.zip\z})
+    end
   end
 end

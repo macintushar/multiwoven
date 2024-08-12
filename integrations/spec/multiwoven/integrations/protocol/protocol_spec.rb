@@ -295,7 +295,8 @@ module Multiwoven
             "cursor_field": "example_cursor_field",
             "current_cursor_field": "current",
             "offset": "100",
-            "limit": "10"
+            "limit": "10",
+            "sync_id": "sync_id"
           }.to_json
 
           sync_config = described_class.from_json(json_data)
@@ -311,6 +312,9 @@ module Multiwoven
           expect(sync_config.destination_sync_mode).to eq("insert")
           expect(sync_config.cursor_field).to eq("example_cursor_field")
           expect(sync_config.current_cursor_field).to eq("current")
+          expect(sync_config.sync_id).to eq("sync_id")
+          sync_config.sync_run_id = "sync_run_id"
+          expect(sync_config.sync_run_id).to eq("sync_run_id")
           sync_config.limit = "10"
           sync_config.offset = "100"
           expect(sync_config.offset).to eq("100")
@@ -355,6 +359,11 @@ module Multiwoven
 
         it "has a query_type 'dbt'" do
           model = Model.new(name: "Test", query: "SELECT * FROM table", query_type: "dbt", primary_key: "id")
+          expect(ModelQueryType.values).to include(model.query_type)
+        end
+
+        it "has a query_type 'dbt'" do
+          model = Model.new(name: "Test", query: "SELECT * FROM table", query_type: "table_selector", primary_key: "id")
           expect(ModelQueryType.values).to include(model.query_type)
         end
       end
@@ -448,16 +457,26 @@ module Multiwoven
 
   RSpec.describe Multiwoven::Integrations::Protocol::TrackingMessage do
     describe "#to_multiwoven_message" do
+      let(:log_message_data) do
+        Multiwoven::Integrations::Protocol::LogMessage.new(
+          name: self.class.name,
+          level: "info",
+          message: { request: "Sample req", response: "Sample req", level: "info" }.to_json
+        )
+      end
       let(:tracking_message) do
-        Multiwoven::Integrations::Protocol::TrackingMessage.new(success: 3, failed: 1)
+        Multiwoven::Integrations::Protocol::TrackingMessage.new(success: 3, failed: 1, logs: [log_message_data])
       end
 
       it "converts to a MultiwovenMessage" do
         multiwoven_message = tracking_message.to_multiwoven_message
-
         expect(multiwoven_message).to be_a(Multiwoven::Integrations::Protocol::MultiwovenMessage)
         expect(multiwoven_message.type).to eq("tracking")
         expect(multiwoven_message.tracking).to eq(tracking_message)
+        expect(multiwoven_message.tracking.logs.first).to be_a(Multiwoven::Integrations::Protocol::LogMessage)
+        expect(multiwoven_message.tracking.logs.first.level).to eq("info")
+        expect(multiwoven_message.tracking.logs.first.message)
+          .to eq("{\"request\":\"Sample req\",\"response\":\"Sample req\",\"level\":\"info\"}")
       end
     end
   end

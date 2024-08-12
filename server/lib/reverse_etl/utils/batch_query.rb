@@ -14,7 +14,7 @@ module ReverseEtl
           params[:sync_config].limit = params[:batch_size]
           params[:sync_config].offset = current_offset
 
-          if initial_sync_config.cursor_field
+          if initial_sync_config.cursor_field.present?
             query_with_cursor = CursorQueryBuilder.build_cursor_query(initial_sync_config, last_cursor_field_value)
             params[:sync_config] = build_cursor_sync_config(params[:sync_config], query_with_cursor)
           end
@@ -57,10 +57,12 @@ module ReverseEtl
           sync_mode: sync_config.sync_mode,
           destination_sync_mode: sync_config.destination_sync_mode,
           cursor_field: sync_config.cursor_field,
-          current_cursor_field: sync_config.current_cursor_field
+          current_cursor_field: sync_config.current_cursor_field,
+          sync_id: sync_config.sync_id
         )
         modified_sync_config.offset = 0
         modified_sync_config.limit = sync_config.limit
+        modified_sync_config.sync_run_id = sync_config.sync_run_id
         modified_sync_config
       end
 

@@ -1,6 +1,6 @@
 import { Box, Flex, Stack, Text, Divider } from '@chakra-ui/react';
 import { NavLink } from 'react-router-dom';
-import IconImage from '../../assets/images/multiwoven-logo.png';
+import IconImage from '../../assets/images/multiwoven-logo.svg';
 import {
   FiSettings,
   FiDatabase,
@@ -13,8 +13,9 @@ import {
 } from 'react-icons/fi';
 import { NavButton } from './navButton';
 import Profile from './Profile';
+import Workspace from './Workspace/Workspace';
 
-import mwTheme from '@/chakra.config';
+import { useConfigStore } from '@/stores/useConfigStore';
 
 type MenuItem = {
   title: string;
@@ -94,7 +95,9 @@ const SideBarFooter = () => (
   <Stack position='absolute' bottom='0' left='0px' right='0px' margin='24px 16px'>
     <Box />
     <Stack spacing='0'>
-      <NavButton label='Settings' icon={FiSettings} disabled={true} />
+      <NavLink to='/settings'>
+        <NavButton label='Settings' icon={FiSettings} />
+      </NavLink>
       <NavLink to='https://docs.multiwoven.com/get-started/introduction'>
         <NavButton label='Documentation' icon={FiBookOpen} />
       </NavLink>
@@ -104,7 +107,7 @@ const SideBarFooter = () => (
 );
 
 const Sidebar = (): JSX.Element => {
-  const { logoUrl } = mwTheme;
+  const { logoUrl } = useConfigStore.getState().configs;
   return (
     <Flex
       position='relative'
@@ -124,6 +127,7 @@ const Sidebar = (): JSX.Element => {
             <Box bgColor='gray.300'>
               <Divider orientation='horizontal' />
             </Box>
+            <Workspace />
             {menus.map(renderMenuSection)}
             <SideBarFooter />
           </Stack>

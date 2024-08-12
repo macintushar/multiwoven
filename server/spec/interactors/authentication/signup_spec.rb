@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# spec/interactors/authentication/signup_spec.rb
-
 require "rails_helper"
 
 RSpec.describe Authentication::Signup, type: :interactor do
@@ -23,19 +21,11 @@ RSpec.describe Authentication::Signup, type: :interactor do
         expect(context).to be_success
       end
 
-      it "confirms the user" do
-        expect(User.find_by(email: params[:email])).to be_nil
-
-        # Execute the interactor
-        context
-
+      it "creates and does not confirm the user" do
+        expect { context }.to change(User, :count).by(1)
         user = User.find_by(email: params[:email])
         expect(user).not_to be_nil
-        expect(user.confirmed_at).not_to be_nil
-      end
-
-      it "provides a JWT token" do
-        expect(context.token).not_to be_nil
+        expect(user.confirmed_at).to be_nil
       end
 
       it "creates a new user" do
@@ -48,6 +38,10 @@ RSpec.describe Authentication::Signup, type: :interactor do
 
       it "creates a new workspace" do
         expect { context }.to change(Workspace, :count).by(1)
+      end
+
+      it "returns a success message" do
+        expect(context.message).to eq("Signup successful! Please check your email to confirm your account.")
       end
     end
 
@@ -77,10 +71,6 @@ RSpec.describe Authentication::Signup, type: :interactor do
       it "does not create a new workspace" do
         expect { context }.not_to change(Workspace, :count)
       end
-
-      it "provides error messages related to missing company_name" do
-        expect(context.user.errors[:company_name]).to include("can't be blank")
-      end
     end
 
     context "when provided with invalid user attributes" do
@@ -90,7 +80,8 @@ RSpec.describe Authentication::Signup, type: :interactor do
             name: "User",
             email: "user@example.com",
             password: "Password@123",
-            password_confirmation: "wrong_password"
+            password_confirmation: "wrong_password",
+            company_name: "Company"
           }
         end
 
@@ -99,7 +90,7 @@ RSpec.describe Authentication::Signup, type: :interactor do
         end
 
         it "provides error messages" do
-          expect(context.user.errors[:password_confirmation]).to include("doesn't match Password")
+          expect(context.errors).to eq("Signup failed: Password confirmation doesn't match Password")
         end
       end
 
@@ -118,26 +109,7 @@ RSpec.describe Authentication::Signup, type: :interactor do
         end
 
         it "provides error messages" do
-          expect(context.user.errors[:email]).to include("can't be blank")
-        end
-      end
-
-      context "name is missing" do
-        let(:params) do
-          {
-            name: "",
-            email: "user@example.com",
-            password: "Password@123",
-            password_confirmation: "Password@123"
-          }
-        end
-
-        it "fails" do
-          expect(context).to be_failure
-        end
-
-        it "provides error messages" do
-          expect(context.user.errors[:name]).to include("can't be blank")
+          expect(context.errors).to include("Signup failed: Email can't be blank, Email is invalid")
         end
       end
 
@@ -162,7 +134,7 @@ RSpec.describe Authentication::Signup, type: :interactor do
         end
 
         it "provides error messages related to company name" do
-          expect(context.user.errors[:company_name]).to include("has already been taken")
+          expect(context.errors).to eq("Signup failed: Company name has already been taken")
         end
       end
     end

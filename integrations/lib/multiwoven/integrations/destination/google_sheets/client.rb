@@ -6,7 +6,7 @@ module Multiwoven
       module GoogleSheets
         include Multiwoven::Integrations::Core
 
-        class Client < DestinationConnector # rubocop:disable Metrics/ClassLength
+        class Client < DestinationConnector
           prepend Multiwoven::Integrations::Core::Fullrefresher
           prepend Multiwoven::Integrations::Core::RateLimiter
           MAX_CHUNK_SIZE = 10_000
@@ -17,7 +17,6 @@ module Multiwoven
             fetch_google_spread_sheets(connection_config)
             success_status
           rescue StandardError => e
-            handle_exception("GOOGLE_SHEETS:CRM:DISCOVER:EXCEPTION", "error", e)
             failure_status(e)
           end
 
@@ -28,14 +27,22 @@ module Multiwoven
             catalog = build_catalog_from_spreadsheets(spreadsheets, connection_config)
             catalog.to_multiwoven_message
           rescue StandardError => e
-            handle_exception("GOOGLE_SHEETS:CRM:DISCOVER:EXCEPTION", "error", e)
+            handle_exception(e, {
+                               context: "GOOGLE_SHEETS:CRM:DISCOVER:EXCEPTION",
+                               type: "error"
+                             })
           end
 
           def write(sync_config, records, action = "create")
             setup_write_environment(sync_config, action)
             process_record_chunks(records, sync_config)
           rescue StandardError => e
-            handle_exception("GOOGLE_SHEETS:CRM:WRITE:EXCEPTION", "error", e)
+            handle_exception(e, {
+                               context: "GOOGLE_SHEETS:CRM:WRITE:EXCEPTION",
+                               type: "error",
+                               sync_id: sync_config.sync_id,
+                               sync_run_id: sync_config.sync_run_id
+                             })
           end
 
           def clear_all_records(sync_config)
@@ -146,19 +153,26 @@ module Multiwoven
 
           # Batch has a limit of sending 2MB data. So creating a chunk of records to meet that limit
           def process_record_chunks(records, sync_config)
+            log_message_array = []
             write_success = 0
             write_failure = 0
 
             records.each_slice(MAX_CHUNK_SIZE) do |chunk|
               values = prepare_chunk_values(chunk, sync_config.stream)
-              update_sheet_values(values, sync_config.stream.name)
+              request, response = *update_sheet_values(values, sync_config.stream.name)
               write_success += values.size
+              log_message_array << log_request_response("info", request, response)
             rescue StandardError => e
-              handle_exception("GOOGLE_SHEETS:RECORD:WRITE:EXCEPTION", "error", e)
+              handle_exception(e, {
+                                 context: "GOOGLE_SHEETS:RECORD:WRITE:EXCEPTION",
+                                 type: "error",
+                                 sync_id: sync_config.sync_id,
+                                 sync_run_id: sync_config.sync_run_id
+                               })
               write_failure += chunk.size
+              log_message_array << log_request_response("error", request, e.message)
             end
-
-            tracking_message(write_success, write_failure)
+            tracking_message(write_success, write_failure, log_message_array)
           end
 
           # We need to format the data to adhere to google sheets API format. This converts the sync mapped data to 2D array format expected by google sheets API
@@ -187,17 +201,12 @@ module Multiwoven
             )
 
             # TODO: Remove & this is added for the test to pass we need
-            @client&.batch_update_values(@spreadsheet_id, batch_update_request)
+            response = @client&.batch_update_values(@spreadsheet_id, batch_update_request)
+            [batch_update_request, response]
           end
 
           def load_catalog
             read_json(CATALOG_SPEC_PATH)
-          end
-
-          def tracking_message(success, failure)
-            Multiwoven::Integrations::Protocol::TrackingMessage.new(
-              success: success, failed: failure
-            ).to_multiwoven_message
           end
 
           def delete_extra_sheets(sheet_ids)

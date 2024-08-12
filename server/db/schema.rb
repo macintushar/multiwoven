@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_04_23_060924) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_26_095056) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -35,6 +35,9 @@ ActiveRecord::Schema[7.1].define(version: 2024_04_23_060924) do
     t.string "description"
   end
 
+  create_table "data_migrations", primary_key: "version", id: :string, force: :cascade do |t|
+  end
+
   create_table "models", force: :cascade do |t|
     t.string "name"
     t.integer "workspace_id"
@@ -54,6 +57,21 @@ ActiveRecord::Schema[7.1].define(version: 2024_04_23_060924) do
     t.index ["name"], name: "index_organizations_on_name", unique: true
   end
 
+  create_table "resources", force: :cascade do |t|
+    t.string "resources_name"
+    t.text "permissions", default: [], array: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "roles", force: :cascade do |t|
+    t.string "role_name"
+    t.string "role_desc"
+    t.jsonb "policies", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "sync_records", force: :cascade do |t|
     t.integer "sync_id"
     t.integer "sync_run_id"
@@ -64,7 +82,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_04_23_060924) do
     t.integer "action"
     t.string "primary_key"
     t.integer "status", default: 0
-    t.text "error"
+    t.jsonb "logs"
     t.index ["sync_id", "fingerprint"], name: "index_sync_records_on_sync_id_and_fingerprint", unique: true
     t.index ["sync_id", "primary_key"], name: "index_sync_records_on_sync_id_and_primary_key", unique: true
   end
@@ -88,6 +106,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_04_23_060924) do
     t.integer "total_query_rows"
     t.datetime "discarded_at"
     t.integer "skipped_rows", default: 0
+    t.integer "sync_run_type", default: 0
     t.index ["discarded_at"], name: "index_sync_runs_on_discarded_at"
   end
 
@@ -131,7 +150,22 @@ ActiveRecord::Schema[7.1].define(version: 2024_04_23_060924) do
     t.integer "failed_attempts", default: 0, null: false
     t.string "unlock_token"
     t.datetime "locked_at"
+    t.integer "status", default: 0
+    t.string "invitation_token"
+    t.datetime "invitation_created_at"
+    t.datetime "invitation_sent_at"
+    t.datetime "invitation_accepted_at"
+    t.integer "invitation_limit"
+    t.string "invited_by_type"
+    t.bigint "invited_by_id"
+    t.integer "invitations_count", default: 0
+    t.string "confirmation_token"
+    t.datetime "confirmation_sent_at"
+    t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["invitation_token"], name: "index_users_on_invitation_token", unique: true
+    t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
+    t.index ["invited_by_type", "invited_by_id"], name: "index_users_on_invited_by"
     t.index ["jti"], name: "index_users_on_jti"
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["unique_id"], name: "index_users_on_unique_id"
@@ -141,9 +175,11 @@ ActiveRecord::Schema[7.1].define(version: 2024_04_23_060924) do
   create_table "workspace_users", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "workspace_id"
-    t.string "role", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "role_id"
+    t.index ["role_id"], name: "index_workspace_users_on_role_id"
+    t.index ["user_id", "workspace_id", "role_id"], name: "index_workspace_users_on_user_workspace_role", unique: true
     t.index ["user_id"], name: "index_workspace_users_on_user_id"
     t.index ["workspace_id"], name: "index_workspace_users_on_workspace_id"
   end
@@ -156,9 +192,12 @@ ActiveRecord::Schema[7.1].define(version: 2024_04_23_060924) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "organization_id"
+    t.text "description"
+    t.string "region"
     t.index ["organization_id"], name: "index_workspaces_on_organization_id"
   end
 
+  add_foreign_key "workspace_users", "roles"
   add_foreign_key "workspace_users", "users"
   add_foreign_key "workspace_users", "workspaces", on_delete: :nullify
   add_foreign_key "workspaces", "organizations"
