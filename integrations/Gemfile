@@ -67,7 +67,13 @@ gem "mysql2"
 
 gem "aws-sdk-sts"
 
-gem "ruby-oci8"
+gem "ruby-oci8", "~> 2.2.12"
+
+gem "aws-sdk-sagemaker"
+
+gem "aws-sdk-sagemakerruntime"
+
+gem "google-cloud-ai_platform-v1"
 
 group :development, :test do
   gem "simplecov", require: false
